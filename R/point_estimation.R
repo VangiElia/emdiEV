@@ -305,12 +305,6 @@ monte_carlo <- function(transformation,
     pop_domains_vec_tmp <- framework$pop_domains_vec
   }
   
-  ests_mcmc <- array(dim = c(
-    N_dom_pop_tmp,
-    L,
-    length(framework$indicator_names)
-  ))
-  
   pop_weights_vec <- if (!is.null(framework$pop_weights)) {
     framework$pop_data[[framework$pop_weights]]
   } else {
@@ -357,7 +351,7 @@ monte_carlo <- function(transformation,
     
     indicator_matrix  # return from one iteration
   }  
-  ests_mcmc <- array(unlist(ests_list), dim = c(N_dom_pop_tmp, L, n_indicators))
+  ests_mcmc <- array(unlist(ests_list), dim = c(N_dom_pop_tmp, L,  length(framework$indicator_names)))
   # Point estimations of indicators by taking the mean
   
   point_estimates <- data.frame(
