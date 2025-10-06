@@ -294,9 +294,9 @@ monte_carlo <- function(transformation,
                         shift,
                         model_par,
                         gen_model) {
-
+  
   # Preparing matrices for indicators for the Monte-Carlo simulation
-
+  
   if(!is.null(framework$aggregate_to_vec)){
     N_dom_pop_tmp <- framework$N_dom_pop_agg
     pop_domains_vec_tmp <- framework$aggregate_to_vec
@@ -304,25 +304,28 @@ monte_carlo <- function(transformation,
     N_dom_pop_tmp <- framework$N_dom_pop
     pop_domains_vec_tmp <- framework$pop_domains_vec
   }
-
+  
   ests_mcmc <- array(dim = c(
     N_dom_pop_tmp,
     L,
     length(framework$indicator_names)
   ))
-
-  for (l in seq_len(L)) {
-
-    # Errors in generating model: individual error term and random effect
-    # See below for function errors_gen.
+  
+  pop_weights_vec <- if (!is.null(framework$pop_weights)) {
+    framework$pop_data[[framework$pop_weights]]
+  } else {
+    rep(1, nrow(framework$pop_data))
+  }
+  
+  # Run the loop in parallel
+  ests_list <- foreach(l = seq_len(L),.options.future = list(globals = structure(T,add = c("errors_gen","prediction_y")))) %dofuture% {
+    
     errors <- errors_gen(
       framework = framework,
       model_par = model_par,
       gen_model = gen_model
     )
-
-    # Prediction of population vector y
-    # See below for function prediction_y.
+    
     population_vector <- prediction_y(
       transformation = transformation,
       lambda = lambda,
@@ -331,45 +334,39 @@ monte_carlo <- function(transformation,
       errors_gen = errors,
       framework = framework
     )
-
-    if(!is.null(framework$pop_weights)){
-      pop_weights_vec <- framework$pop_data[[framework$pop_weights]]
-    }else{
-      pop_weights_vec <- rep(1, nrow(framework$pop_data))
-    }
-
-    # Calculation of indicators for each Monte Carlo population
-    ests_mcmc[, l, ] <-
-      matrix(
-        nrow = N_dom_pop_tmp,
-        data = unlist(lapply(framework$indicator_list,
-          function(f, threshold) {
-            matrix(
-              nrow = N_dom_pop_tmp,
-              data = unlist(mapply(
-                y = split(population_vector, pop_domains_vec_tmp),
-                pop_weights = split(pop_weights_vec, pop_domains_vec_tmp),
-                f,
-                threshold = framework$threshold
-              )), byrow = TRUE
-            )
-          },
-          threshold = framework$threshold
-        ))
-      )
-  } # End for loop
-
-
+    
+    # Calculate indicators
+    indicator_matrix <- matrix(
+      nrow = N_dom_pop_tmp,
+      data = unlist(lapply(framework$indicator_list,
+                           function(f, threshold) {
+                             matrix(
+                               nrow = N_dom_pop_tmp,
+                               data = unlist(mapply(
+                                 y = split(population_vector, pop_domains_vec_tmp),
+                                 pop_weights = split(pop_weights_vec, pop_domains_vec_tmp),
+                                 f,
+                                 threshold = framework$threshold
+                               )),
+                               byrow = TRUE
+                             )
+                           },
+                           threshold = framework$threshold
+      ))
+    )
+    
+    indicator_matrix  # return from one iteration
+  }  
+  ests_mcmc <- array(unlist(ests_list), dim = c(N_dom_pop_tmp, L, n_indicators))
   # Point estimations of indicators by taking the mean
-
+  
   point_estimates <- data.frame(
     Domain = unique(pop_domains_vec_tmp),
     apply(ests_mcmc, c(3), rowMeans)
   )
   colnames(point_estimates) <- c("Domain", framework$indicator_names)
   return(point_estimates)
-} # End Monte-Carlo
-
+}
 
 # The function errors_gen returns error terms of the generating model.
 # See Molina and Rao (2010) p. 375 (20)
