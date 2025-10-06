@@ -6,89 +6,61 @@
 # mse_estim (see below)
 # The parametric boostrap approach can be find in Molina and Rao (2010) p. 376
 
-parametric_bootstrap <- function(framework,
-                                 point_estim,
-                                 fixed,
-                                 transformation,
-                                 interval = c(-1, 2),
-                                 L,
-                                 B,
-                                 boot_type,
-                                 parallel_mode,
-                                 cpus) {
-  message("\r", "Bootstrap started                                            ")
+parametric_bootstrap <- function (framework,
+                                  point_estim,
+                                  fixed,
+                                  transformation,
+                                  interval = c(-1, 2),
+                                  L,
+                                  B,
+                                  boot_type,
+                                  cpus)
+{
+  message("\r", "Bootstrap started")
   if (boot_type == "wild") {
     res_s <- residuals(point_estim$model)
     fitted_s <- fitted(point_estim$model, level = 1)
-  } else {
+  }
+  else {
     res_s <- NULL
     fitted_s <- NULL
   }
-
+  
   start_time <- Sys.time()
-  if (cpus > 1) {
-    cpus <- min(cpus, parallel::detectCores())
-    parallelMap::parallelStart(
-      mode = parallel_mode,
-      cpus = cpus, show.info = FALSE
+  
+  mses <-
+    simplify2array(
+      future.apply::future_lapply(
+        X = seq_len(B),
+        FUN = mse_estim_wrapper,
+        B = B,
+        framework = framework,
+        lambda = point_estim$optimal_lambda,
+        shift = point_estim$shift_par,
+        model_par = point_estim$model_par,
+        gen_model = point_estim$gen_model,
+        fixed = fixed,
+        transformation = transformation,
+        interval = interval,
+        L = L,
+        res_s = res_s,
+        fitted_s = fitted_s,
+        start_time = start_time,
+        boot_type = boot_type,
+        future.seed=TRUE
+      )
     )
-
-    if (parallel_mode == "socket") {
-      parallel::clusterSetRNGStream()
-    }
-    parallelMap::parallelLibrary("nlme")
-    mses <- simplify2array(parallelMap::parallelLapply(
-      xs              = seq_len(B),
-      fun             = mse_estim_wrapper,
-      B               = B,
-      framework       = framework,
-      lambda          = point_estim$optimal_lambda,
-      shift           = point_estim$shift_par,
-      model_par       = point_estim$model_par,
-      gen_model       = point_estim$gen_model,
-      fixed           = fixed,
-      transformation  = transformation,
-      interval        = interval,
-      L               = L,
-      res_s           = res_s,
-      fitted_s        = fitted_s,
-      start_time      = start_time,
-      boot_type       = boot_type
-    ))
-    parallelMap::parallelStop()
-  } else {
-    mses <- simplify2array(lapply(
-      X = seq_len(B),
-      FUN = mse_estim_wrapper,
-      B = B,
-      framework = framework,
-      lambda = point_estim$optimal_lambda,
-      shift = point_estim$shift_par,
-      model_par = point_estim$model_par,
-      gen_model = point_estim$gen_model,
-      fixed = fixed,
-      transformation = transformation,
-      interval = interval,
-      L = L,
-      res_s = res_s,
-      fitted_s = fitted_s,
-      start_time = start_time,
-      boot_type = boot_type
-    ))
-  }
-
+  
   message("\r", "Bootstrap completed", "\n")
-  if (.Platform$OS.type == "windows") {
-    flush.console()
-  }
-
   mses <- apply(mses, c(1, 2), mean)
-  if(is.null(framework$aggregate_to_vec)){
-    mses <- data.frame(Domain = unique(framework$pop_domains_vec), mses)
-  }else{
-    mses <- data.frame(Domain = unique(framework$aggregate_to_vec), mses)
+  if (is.null(framework$aggregate_to_vec)) {
+    mses <- data.frame(Domain = unique(framework$pop_domains_vec),
+                       mses)
   }
-
+  else {
+    mses <- data.frame(Domain = unique(framework$aggregate_to_vec),
+                       mses)
+  }
   return(mses)
 }
 
