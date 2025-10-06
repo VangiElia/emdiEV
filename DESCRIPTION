@@ -53,7 +53,8 @@ Imports:
     formula.tools,
     saeRobust,
     rlang, 
-    spdep
+    spdep,
+    doFuture
 Suggests:
     testthat,
     R.rsp,
