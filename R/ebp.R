@@ -272,9 +272,10 @@ ebp <- function(fixed,
   }
   # Data manipulation and notational framework ---------------------------------
   if (!is.null(seed)) {
-    if (cpus > 1 && parallel_mode != "socket") {
-      RNG_kind <- RNGkind()
-      set.seed(seed, kind = "L'Ecuyer")
+    if (cpus > 1 ) {
+      
+      plan("multisession",workers=cpus)
+      
     } else {
       set.seed(seed)
     }
@@ -324,7 +325,6 @@ ebp <- function(fixed,
       L = L,
       B = B,
       boot_type = boot_type,
-      parallel_mode = parallel_mode,
       cpus = cpus
     )
 
@@ -386,5 +386,6 @@ ebp <- function(fixed,
     RNGkind(RNG_kind[1]) # restoring RNG type
   }
   class(ebp_out) <- c("ebp", "emdi")
+  plan("sequential")
   return(ebp_out)
 }
